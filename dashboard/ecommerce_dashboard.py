@@ -2,12 +2,12 @@ import pandas as pd
 import streamlit as st
 
 # Read CSV files
-customers = pd.read_csv("dashboard\customers_dataset.csv")
-orders = pd.read_csv("dashboard\orders_dataset.csv")
-products = pd.read_csv("dashboard\products_dataset.csv")
-categories_translation = pd.read_csv("dashboard\product_category_name_translation.csv")
-order_items = pd.read_csv("dashboard\order_items_dataset.csv")
-payments = pd.read_csv("dashboard\order_payments_dataset.csv")
+customers = pd.read_csv("dashboard/customers_dataset.csv")
+orders = pd.read_csv("dashboard/orders_dataset.csv")
+products = pd.read_csv("dashboard/products_dataset.csv")
+categories_translation = pd.read_csv("dashboard/product_category_name_translation.csv")
+order_items = pd.read_csv("dashboard/order_items_dataset.csv")
+payments = pd.read_csv("dashboard/order_payments_dataset.csv")
 
 # Convert datetime columns in orders DataFrame
 orders['order_purchase_timestamp'] = pd.to_datetime(orders['order_purchase_timestamp'], format='%Y-%m-%d %H:%M:%S')
