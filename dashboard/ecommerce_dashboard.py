@@ -12,11 +12,8 @@ payments = pd.read_csv("dashboard/order_payments_dataset.csv")
 
 # Convert datetime columns in orders DataFrame
 orders['order_purchase_timestamp'] = pd.to_datetime(orders['order_purchase_timestamp'], format='%Y-%m-%d %H:%M:%S')
-orders['order_approved_at'] = pd.to_datetime(orders['order_approved_at'], format='%Y-%m-%d %H:%M:%S')
-orders['order_delivered_carrier_date'] = pd.to_datetime(orders['order_delivered_carrier_date'], format='%Y-%m-%d %H:%M:%S')
-orders['order_delivered_customer_date'] = pd.to_datetime(orders['order_delivered_customer_date'], format='%Y-%m-%d %H:%M:%S')
-orders['order_estimated_delivery_date'] = pd.to_datetime(orders['order_estimated_delivery_date'], format='%Y-%m-%d %H:%M:%S')
 
+# Set page configuration for Streamlit
 st.set_page_config(
     page_title="E-Commerce Performance Dashboard",
     page_icon=":money:",
@@ -24,7 +21,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Streamlit app
+# Streamlit app title
 st.title("Sales and Product Category Analysis Dashboard")
 
 # Sidebar filters
@@ -43,6 +40,23 @@ filtered_orders = orders[(orders['order_purchase_timestamp'] >= start_datetime) 
                          (orders['order_purchase_timestamp'] <= end_datetime)]
 
 filtered_order_ids = filtered_orders['order_id'].to_list()
+
+# Filter order_items to include only filtered order IDs
+filtered_order_items = order_items[order_items['order_id'].isin(filtered_order_ids)]
+
+# Merge order_items with products to get product categories
+merged_data = filtered_order_items.merge(products[['product_id', 'product_category_name']], on='product_id', how='left')
+
+# Merge with categories_translation to get product_category_name_english
+merged_data = merged_data.merge(categories_translation[['product_category_name', 'product_category_name_english']], on='product_category_name', how='left')
+
+# Apply product category filter
+filtered_merged_data = merged_data[merged_data['product_category_name_english'].isin(product_category)]
+
+# Filter the orders again based on the filtered products
+filtered_order_ids = filtered_merged_data['order_id'].unique().tolist()
+
+filtered_orders = orders[orders['order_id'].isin(filtered_order_ids)]
 
 # Calculate daily transaction amount and transaction count
 daily_transaction_data = []
@@ -80,6 +94,7 @@ mean_transaction_count_delta = daily_transaction_df['transaction_count_delta'].m
 # Tabs for different sections
 tab1, tab2, tab3 = st.tabs(["Sales and Revenue", "Product Category", "Top States for Product Categories"])
 
+# Tab 1: Sales and Revenue - Update to use filtered data
 with tab1:
     st.header('Sales and Revenue')
     col1, col2 = st.columns(2)
@@ -98,24 +113,13 @@ with tab1:
     st.line_chart(daily_transaction_df[['date', 'transaction_count']].set_index('date'))
     st.line_chart(daily_transaction_df[['date', 'total_amount']].set_index('date'))
 
+# Tab 2: Product Category Analysis
 with tab2:
     st.header('Product Category Analysis')
-    
-    # Filter order_items to include only filtered order IDs
-    filtered_order_items = order_items[order_items['order_id'].isin(filtered_order_ids)]
-    
-    # Merge order_items with products on 'product_id' to get 'product_category_name'
-    merged_data = filtered_order_items.merge(products[['product_id', 'product_category_name']], on='product_id', how='left')
-    
-    # Merge with categories_translation to get 'product_category_name_english'
-    merged_data = merged_data.merge(categories_translation[['product_category_name', 'product_category_name_english']], on='product_category_name', how='left')
-    
-    # Apply product category filter
-    filtered_merged_data = merged_data[merged_data['product_category_name_english'].isin(product_category)]
-    
+
     # Calculate purchase counts for each product category in English
     category_counts = filtered_merged_data['product_category_name_english'].value_counts()
-    
+
     # Sort category counts in descending order
     sorted_category_counts = category_counts.sort_values(ascending=False)
 
@@ -127,24 +131,21 @@ with tab2:
     st.subheader('Visualizations')
     st.bar_chart(sorted_category_counts)
 
+# Tab 3: Top States for Each Product Category - Update to use filtered_merged_data
 with tab3:
     st.header("Top 5 States for Each Product Category")
 
     # Merge orders with customers to get state information
     orders_customers = orders.merge(customers[['customer_id', 'customer_state']], on='customer_id', how='left')
 
-    # Merge orders with order_items and products to get product category information
+    # Merge orders with filtered_order_items and products to get product category information
     orders_products = (orders_customers
-                       .merge(order_items[['order_id', 'product_id']], on='order_id', how='left')
+                       .merge(filtered_merged_data[['order_id', 'product_id']], on='order_id', how='left')
                        .merge(products[['product_id', 'product_category_name']], on='product_id', how='left')
                        .merge(categories_translation, on='product_category_name', how='left'))
 
-    # Filter data based on selected date range
-    filtered_orders_products = orders_products[(orders_products['order_purchase_timestamp'] >= start_datetime) &
-                                               (orders_products['order_purchase_timestamp'] <= end_datetime)]
-
     # Group by product category and state, then count the number of orders for each combination
-    category_state_counts = (filtered_orders_products
+    category_state_counts = (orders_products
                              .groupby(['product_category_name_english', 'customer_state'])
                              .size()
                              .reset_index(name='order_count'))
@@ -158,6 +159,7 @@ with tab3:
 
     # Calculate percentage of total transactions for each state and product category
     top_states_per_category['percentage'] = top_states_per_category['order_count'] / category_totals * 100
+
 
     # Plot horizontal stacked bar chart
     fig = px.bar(
@@ -179,6 +181,3 @@ with tab3:
     st.subheader("Metrics Table: Transaction Counts by State and Product Category")
     matrix_table = category_state_counts.pivot(index='customer_state', columns='product_category_name_english', values='order_count').fillna(0)
     st.dataframe(matrix_table)
-
-
-
